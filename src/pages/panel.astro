@@ -1,0 +1,64 @@
+---
+export const prerender = false;
+import { getCurrentGoal } from './api/meta';
+
+const goal = getCurrentGoal();
+---
+
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Panel de Control - Meta</title>
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+  </head>
+  <body class="flex min-h-screen items-center justify-center bg-zinc-950 font-sans text-zinc-100">
+    <div class="w-full max-w-md rounded-xl border border-zinc-800 bg-zinc-900 p-6 shadow-2xl">
+      <h3 class="mb-1 text-base font-bold text-white">Panel del Streamer</h3>
+      <p class="mb-4 text-xs text-zinc-400">Modifica la meta de tu widget de OBS en tiempo real.</p>
+
+      <div class="flex gap-3">
+        <input
+          type="number"
+          id="goal-input"
+          value={goal}
+          class="w-full rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm text-white focus:border-purple-500 focus:outline-none"
+          placeholder="Ej: 150"
+        />
+        <button
+          id="save-goal-btn"
+          class="cursor-pointer rounded-lg bg-purple-600 px-5 py-2 text-sm font-semibold text-white transition-colors hover:bg-purple-700"
+        >
+          Fijar Meta
+        </button>
+      </div>
+    </div>
+
+    <script>
+      const button = document.getElementById('save-goal-btn');
+      const input = document.getElementById('goal-input') as HTMLInputElement;
+
+      button?.addEventListener('click', async () => {
+        const newGoal = input?.value;
+        if (!newGoal) return;
+
+        try {
+          const response = await fetch('/api/meta', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ goal: newGoal }),
+          });
+
+          if (response.ok) {
+            alert('¡Meta actualizada en OBS con éxito!');
+            window.location.reload();
+          } else {
+            alert('Error al actualizar la meta');
+          }
+        } catch (error) {
+          console.error('Error:', error);
+        }
+      });
+    </script>
+  </body>
+</html>

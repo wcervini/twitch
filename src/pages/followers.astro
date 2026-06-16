@@ -1,0 +1,123 @@
+---
+export const prerender = false;
+import { getCurrentGoal } from './api/meta';
+
+const TWITCH_CLIENT_ID = process.env.TWITCH_CLIENT_ID || 'pyg29uxjbs4esiytsevbhxsn9h5fwa';
+const TWITCH_TOKEN = process.env.TWITCH_ACCESS_TOKEN || 'k26j9ya8kzamspeonlxsnuu63oax17';
+const BROADCASTER_ID = process.env.TWITCH_BROADCASTER_ID || '687700344';
+const CANAL_TWITCH = 'underghround';
+let followerCount = 0;
+let errorMessage = '';
+
+try {
+  const response = await fetch(
+    `https://api.twitch.tv/helix/channels/followers?broadcaster_id=${BROADCASTER_ID}`,
+    {
+      headers: {
+        'Client-ID': TWITCH_CLIENT_ID,
+        Authorization: `Bearer ${TWITCH_TOKEN}`,
+      },
+    },
+  );
+
+  if (response.ok) {
+    const data = await response.json();
+    followerCount = data.total;
+  } else {
+    errorMessage = 'Error con Twitch API';
+  }
+} catch (e) {
+  errorMessage = 'Sin conexión';
+}
+
+const goal = getCurrentGoal();
+const percentage = Math.min(Math.round((followerCount / goal) * 100), 100);
+---
+
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <!-- Recarga automática cada 30 segundos en OBS para buscar nuevos seguidores -->
+  <meta http-equiv="refresh" content="30">
+  <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+  <style>
+    /* Forzamos fondo transparente para que en OBS no tape tu juego */
+    body { background: transparent !important; }
+  </style>
+</head>
+<body class="overflow-hidden p-2 font-sans">
+
+  {errorMessage ? (
+    <div class="w-full max-w-md rounded-lg border border-red-800 bg-red-950/80 p-3 text-xs text-red-300">
+      ⚠️ {errorMessage}
+    </div>
+  ) : (
+    /* CONTENEDOR DE LA BARRA (Diseño compacto para stream) */
+    <div class="relative h-9 w-full max-w-md overflow-hidden rounded-lg border border-zinc-700 bg-zinc-900/90 p-[3px] shadow-lg">
+
+      <!-- Relleno de color dinámico (Barra de progreso) -->
+      <div
+        class="h-full rounded-md bg-gradient-to-r from-purple-600 to-indigo-500 shadow-[0_0_15px_rgba(147,51,234,0.6)] transition-all duration-500"
+        style={`width: ${percentage}%`}
+      >
+      </div>
+
+      <!-- TEXTO INTEGRADO DENTRO DE LA BARRA -->
+      <div class="absolute inset-0 flex items-center justify-between px-4 text-sm font-black tracking-wide text-white drop-shadow-[0_2px_4px_rgba(0,0,0,0.9)]">
+        <span class="uppercase">Meta Seguidores</span>
+        <span>{followerCount} / {goal} ({percentage}%)</span>
+      </div>
+
+    </div>
+  )}
+
+<!-- SCRIPT PARA EL SONIDO DEL CHAT -->
+  <script define:vars={{ canal: CANAL_TWITCH }}>
+    // 1. Cargamos el sonido que guardaste en la carpeta public
+    const audioBip = new Audio('/bip.mp3');
+
+    // 2. Nos conectamos al servidor oficial de Chat de Twitch (IRC por WebSockets)
+    const ws = new WebSocket('wss://irc-ws.chat.twitch.tv:443');
+
+    ws.onopen = () => {
+      // Nos unimos de forma anónima (solo para escuchar mensajes, no requiere tokens complejos de chat)
+      ws.send('CAP REQ :twitch.tv/tags twitch.tv/commands');
+      ws.send('PASS SCHMOOPIE');
+      ws.send('NICK justinfan12345');
+      ws.send(`JOIN #${canal.toLowerCase()}`);
+      console.log(`Conectado exitosamente al chat de: ${canal}`);
+    };
+
+    ws.onmessage = (event) => {
+      const mensaje = event.data;
+
+      // Si el servidor nos manda un PING, respondemos PONG para que no nos desconecte
+      if (mensaje.startsWith('PING')) {
+        ws.send('PONG :tmi.twitch.tv');
+        return;
+      }
+
+      // Si el mensaje contiene "PRIVMSG", significa que alguien acaba de escribir texto en el chat
+      if (mensaje.includes('PRIVMSG')) {
+        // Reproducimos el bip desde el principio
+        audioBip.currentTime = 0;
+        audioBip.play().catch(err => console.log("Espera a que interactúe el usuario para sonar:", err));
+      }
+    };
+
+    ws.onerror = (error) => {
+      console.error('Error en el WebSocket del chat:', error);
+    };
+
+    ws.onclose = () => {
+      console.log('Conexión con el chat cerrada. Intentando reconectar...');
+      // Si se cae el internet o se cierra, se reconecta solo en 5 segundos
+      setTimeout(() => window.location.reload(), 5000);
+    };
+  </script>
+
+</body>
+</html>
+
+
